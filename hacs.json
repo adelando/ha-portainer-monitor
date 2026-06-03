@@ -1,0 +1,6 @@
+{
+  "name": "Portainer Monitor Card",
+  "render_readme": true,
+  "filename": "portainer-monitor-card.js",
+  "content_in_root": false
+}
