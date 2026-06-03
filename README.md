@@ -51,6 +51,7 @@ Child container rows are **auto-discovered** — the card finds all container de
 type: custom:portainer-container-card
 title: tradebot
 status_entity: binary_sensor.portainer_tradebot_status
+state_entity: sensor.portainer_tradebot_container_state
 cpu_entity: sensor.portainer_tradebot_cpu_usage_total
 memory_entity: sensor.portainer_tradebot_memory_usage_percentage
 container_switch_entity: switch.portainer_tradebot_container
@@ -59,6 +60,8 @@ pause_button_entity: button.portainer_tradebot_pause_container
 resume_button_entity: button.portainer_tradebot_resume_container
 ip_address: "192.168.0.4"
 ```
+
+> **Note:** `state_entity` is required for the **Resume** button to appear. The card only renders Resume when `sensor.*_container_state` reads `paused` — without it the button is always hidden.
 
 ### Endpoint Card
 
