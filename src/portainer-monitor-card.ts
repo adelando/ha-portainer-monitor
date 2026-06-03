@@ -38,6 +38,13 @@ function color(level: StatusLevel): string {
   return STATUS_COLOR[level];
 }
 
+function statusIcon(level: StatusLevel): string {
+  if (level === "ok") return "mdi:check-circle";
+  if (level === "warn") return "mdi:alert-circle";
+  if (level === "err") return "mdi:close-circle";
+  return "mdi:help-circle-outline";
+}
+
 function stateLabel(state: string | undefined): string {
   if (!state) return "Unavailable";
   if (state === "unavailable" || state === "unknown") return "Unavailable";
@@ -46,15 +53,21 @@ function stateLabel(state: string | undefined): string {
   return state.charAt(0).toUpperCase() + state.slice(1);
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
 function getState(hass: HomeAssistant, entityId: string | undefined): string | undefined {
   if (!entityId) return undefined;
   return hass.states[entityId]?.state;
+}
+
+function entityValueWithUnit(hass: HomeAssistant, entityId: string | undefined): string {
+  if (!entityId) return "—";
+  const entity = hass.states[entityId];
+  if (!entity || entity.state === "unavailable" || entity.state === "unknown") return "—";
+  const unit = entity.attributes.unit_of_measurement as string | undefined;
+  return unit ? `${entity.state} ${unit}` : entity.state;
+}
+
+function cardTitle(title: string | undefined, cardType: string): string {
+  return title ? `${title} - ${cardType}` : cardType;
 }
 
 function findEntityInDevice(
@@ -228,8 +241,57 @@ class PortainerStackCard extends LitElement {
     return [
       SHARED_CSS,
       css`
-        .stats-grid {
-          grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        .stack-summary {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 2px;
+        }
+        .container-rows {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        .ctr-row {
+          display: grid;
+          grid-template-columns: minmax(60px, auto) 1fr 1fr auto;
+          align-items: center;
+          gap: 6px 12px;
+          padding: 5px 0;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .ctr-name {
+          font-size: 0.82rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          opacity: 0.8;
+          white-space: nowrap;
+        }
+        .ctr-stat {
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+        }
+        .ctr-stat-label {
+          font-size: 0.65rem;
+          font-weight: 700;
+          opacity: 0.45;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+        .ctr-stat-value {
+          font-size: 0.85rem;
+          font-weight: 600;
+        }
+        .ctr-status {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .ctr-status ha-icon {
+          --mdc-icon-size: 16px;
         }
       `,
     ];
@@ -266,7 +328,7 @@ class PortainerStackCard extends LitElement {
     const statusState = getState(this.hass, cfg.stack_status_entity);
     const level = binaryToLevel(statusState);
     const borderColor = color(level);
-    const label = statusState === "on" ? "Running" : stateLabel(statusState);
+    const mainLabel = statusState === "on" ? "Running" : stateLabel(statusState);
 
     const containers = this._deviceId
       ? getContainersForStack(this.hass, this._deviceId)
@@ -275,10 +337,10 @@ class PortainerStackCard extends LitElement {
     const stackType = getState(this.hass, cfg.stack_type_entity);
     const containerCount = getState(this.hass, cfg.container_count_entity);
     const switchState = getState(this.hass, cfg.stack_switch_entity);
+    const overrides = cfg.container_overrides ?? {};
 
-    const title = cfg.title || "Stack";
+    const title = cardTitle(cfg.title, "Stack");
     const ip = cfg.ip_address || "";
-    const cols = Math.min(containers.length * 3 + (stackType || containerCount ? 1 : 0), 8);
 
     return html`
       <ha-card style="box-shadow: inset 0 0 0 2px ${borderColor};">
@@ -295,30 +357,30 @@ class PortainerStackCard extends LitElement {
         </div>
 
         <div class="status-row">
-          <span class="status-text">${label}</span>
+          <span class="status-text">${mainLabel}</span>
           <span class="status-dot" style="background:${borderColor};"></span>
           ${ip ? html`<span class="ip-label">${ip}</span>` : nothing}
         </div>
 
-        ${containers.length > 0 || stackType || containerCount
+        ${stackType || containerCount
+          ? html`
+              <div class="stack-summary">
+                ${containerCount
+                  ? html`<span class="stat-label"
+                      >${containerCount} container${Number(containerCount) !== 1 ? "s" : ""}</span
+                    >`
+                  : nothing}
+                ${stackType
+                  ? html`<span class="stat-label">${stackType}</span>`
+                  : nothing}
+              </div>
+            `
+          : nothing}
+
+        ${containers.length > 0
           ? html`
               <div class="divider"></div>
-              <div
-                class="stats-grid"
-                style="grid-template-columns: repeat(${cols}, 1fr);"
-              >
-                ${stackType || containerCount
-                  ? html`
-                      <div class="stat-col">
-                        <div class="stat-label">Stack</div>
-                        <div class="stat-value">
-                          ${containerCount
-                            ? `${containerCount} container${Number(containerCount) !== 1 ? "s" : ""}`
-                            : stackType || "—"}
-                        </div>
-                      </div>
-                    `
-                  : nothing}
+              <div class="container-rows">
                 ${containers.map((c) => {
                   const cStatus = getState(this.hass, c.statusEntity);
                   const cState = getState(this.hass, c.stateEntity);
@@ -333,32 +395,30 @@ class PortainerStackCard extends LitElement {
                       ? "Running"
                       : stateLabel(cStatus)
                     : stateLabel(cState);
-                  const shortName = c.name?.split("-").pop() ?? c.name;
+                  const override = overrides[c.deviceId];
+                  const displayName = override?.label || c.name?.split("-").pop() || c.name;
 
                   return html`
-                    ${cCpu !== undefined
-                      ? html`
-                          <div class="stat-col">
-                            <div class="stat-label">CPU ${shortName}</div>
-                            <div class="stat-value">
-                              ${parseFloat(cCpu).toFixed(2)}%
+                    <div class="ctr-row">
+                      <span class="ctr-name">${displayName}</span>
+                      ${cCpu !== undefined
+                        ? html`
+                            <div class="ctr-stat">
+                              <span class="ctr-stat-label">CPU</span>
+                              <span class="ctr-stat-value">${parseFloat(cCpu).toFixed(2)}%</span>
                             </div>
-                          </div>
-                        `
-                      : nothing}
-                    ${cMem !== undefined
-                      ? html`
-                          <div class="stat-col">
-                            <div class="stat-label">MEM ${shortName}</div>
-                            <div class="stat-value">
-                              ${parseFloat(cMem).toFixed(1)}%
+                          `
+                        : html`<div></div>`}
+                      ${cMem !== undefined
+                        ? html`
+                            <div class="ctr-stat">
+                              <span class="ctr-stat-label">MEM</span>
+                              <span class="ctr-stat-value">${parseFloat(cMem).toFixed(1)}%</span>
                             </div>
-                          </div>
-                        `
-                      : nothing}
-                    <div class="stat-col">
-                      <div class="stat-label">${shortName}</div>
-                      <div class="stat-value" style="color:${cColor};">
+                          `
+                        : html`<div></div>`}
+                      <div class="ctr-status" style="color:${cColor};">
+                        <ha-icon icon="${statusIcon(cLevel)}"></ha-icon>
                         ${cLabel}
                       </div>
                     </div>
@@ -444,16 +504,16 @@ class PortainerContainerCard extends LitElement {
 
     const cfg = this._config;
     const statusState = getState(this.hass, cfg.status_entity);
+    const containerState = getState(this.hass, cfg.state_entity);
     const level = binaryToLevel(statusState);
     const borderColor = color(level);
     const label = statusState === "on" ? "Running" : stateLabel(statusState);
 
-    const containerState = getState(this.hass, cfg.state_entity);
     const cpu = getState(this.hass, cfg.cpu_entity);
     const mem = getState(this.hass, cfg.memory_entity);
     const switchState = getState(this.hass, cfg.container_switch_entity);
     const ip = cfg.ip_address || "";
-    const title = cfg.title || "Container";
+    const title = cardTitle(cfg.title, "Container");
     const memPct = mem !== undefined ? Math.min(parseFloat(mem), 100) : 0;
     const memColor =
       memPct > 85 ? STATUS_COLOR.err : memPct > 70 ? STATUS_COLOR.warn : STATUS_COLOR.ok;
@@ -621,19 +681,25 @@ class PortainerEndpointCard extends LitElement {
     const borderColor = color(level);
     const label = statusState === "on" ? "Online" : stateLabel(statusState);
 
+    const ip = cfg.ip_address || "";
+    const title = cardTitle(cfg.title, "Endpoint");
+
     const totalContainers = getState(this.hass, cfg.containers_count_entity);
     const running = getState(this.hass, cfg.containers_running_entity);
     const stopped = getState(this.hass, cfg.containers_stopped_entity);
-    const paused = getState(this.hass, cfg.containers_paused_entity);
     const dockerVersion = getState(this.hass, cfg.docker_version_entity);
     const os = getState(this.hass, cfg.os_entity);
-    const memTotal = getState(this.hass, cfg.memory_total_entity);
     const cpuTotal = getState(this.hass, cfg.cpu_total_entity);
-    const imgTotal = getState(this.hass, cfg.image_disk_total_entity);
-    const imgReclaimable = getState(this.hass, cfg.image_disk_reclaimable_entity);
-    const ctrDiskTotal = getState(this.hass, cfg.container_disk_total_entity);
-    const ip = cfg.ip_address || "";
-    const title = cfg.title || "Endpoint";
+
+    const imgTotal = entityValueWithUnit(this.hass, cfg.image_disk_total_entity);
+    const imgReclaimable = entityValueWithUnit(this.hass, cfg.image_disk_reclaimable_entity);
+    const ctrDiskTotal = entityValueWithUnit(this.hass, cfg.container_disk_total_entity);
+    const memTotal = entityValueWithUnit(this.hass, cfg.memory_total_entity);
+
+    const hasDisk =
+      cfg.image_disk_total_entity ||
+      cfg.image_disk_reclaimable_entity ||
+      cfg.container_disk_total_entity;
 
     return html`
       <ha-card style="box-shadow: inset 0 0 0 2px ${borderColor};">
@@ -683,19 +749,6 @@ class PortainerEndpointCard extends LitElement {
                 </div>
               `
             : nothing}
-          ${paused !== undefined
-            ? html`
-                <div class="stat-col">
-                  <div class="stat-label">Paused</div>
-                  <div
-                    class="stat-value"
-                    style="color:${Number(paused) > 0 ? STATUS_COLOR.warn : "inherit"};"
-                  >
-                    ${paused}
-                  </div>
-                </div>
-              `
-            : nothing}
           ${dockerVersion !== undefined
             ? html`
                 <div class="stat-col">
@@ -712,11 +765,11 @@ class PortainerEndpointCard extends LitElement {
                 </div>
               `
             : nothing}
-          ${memTotal !== undefined
+          ${cfg.memory_total_entity
             ? html`
                 <div class="stat-col">
                   <div class="stat-label">RAM</div>
-                  <div class="stat-value">${formatBytes(Number(memTotal))}</div>
+                  <div class="stat-value">${memTotal}</div>
                 </div>
               `
             : nothing}
@@ -730,29 +783,29 @@ class PortainerEndpointCard extends LitElement {
             : nothing}
         </div>
 
-        ${imgTotal !== undefined || ctrDiskTotal !== undefined
+        ${hasDisk
           ? html`
               <div class="disk-section">
                 <div class="divider"></div>
                 <div class="disk-title">Disk Usage</div>
                 <div class="disk-row">
-                  ${imgTotal !== undefined
+                  ${cfg.image_disk_total_entity
                     ? html`
                         <div class="stat-col">
                           <div class="stat-label">Images</div>
                           <div class="stat-value">
-                            ${formatBytes(Number(imgTotal))}${imgReclaimable
-                              ? ` (${formatBytes(Number(imgReclaimable))} reclaimable)`
+                            ${imgTotal}${cfg.image_disk_reclaimable_entity && imgReclaimable !== "—"
+                              ? ` (${imgReclaimable} reclaimable)`
                               : ""}
                           </div>
                         </div>
                       `
                     : nothing}
-                  ${ctrDiskTotal !== undefined
+                  ${cfg.container_disk_total_entity
                     ? html`
                         <div class="stat-col">
                           <div class="stat-label">Containers</div>
-                          <div class="stat-value">${formatBytes(Number(ctrDiskTotal))}</div>
+                          <div class="stat-value">${ctrDiskTotal}</div>
                         </div>
                       `
                     : nothing}
@@ -786,6 +839,33 @@ customElements.define("portainer-endpoint-card", PortainerEndpointCard);
 // EDITORS
 // ---------------------------------------------------------------------------
 
+const EDITOR_CSS = css`
+  .editor-row {
+    margin-bottom: 12px;
+  }
+  .editor-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    opacity: 0.7;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .editor-section {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.4;
+    margin: 16px 0 8px;
+  }
+  .editor-sub {
+    font-size: 0.78rem;
+    font-weight: 600;
+    opacity: 0.55;
+    margin: 10px 0 6px;
+  }
+`;
+
 function portainerDomainFilter(hass: HomeAssistant, domain: string) {
   return (entity: { entity_id: string }) =>
     entity.entity_id.startsWith(domain + ".") &&
@@ -796,37 +876,26 @@ function portainerDomainFilter(hass: HomeAssistant, domain: string) {
 
 class PortainerStackCardEditor extends LitElement {
   static get properties() {
-    return { hass: {}, _config: {} };
+    return { hass: {}, _config: {}, _deviceId: { state: true } };
   }
 
   static get styles() {
-    return css`
-      .editor-row {
-        margin-bottom: 12px;
-      }
-      .editor-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        opacity: 0.7;
-        margin-bottom: 4px;
-        display: block;
-      }
-      .editor-section {
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        opacity: 0.4;
-        margin: 16px 0 8px;
-      }
-    `;
+    return EDITOR_CSS;
   }
 
   _config!: StackCardConfig;
   hass!: HomeAssistant;
+  _deviceId: string | null = null;
 
   setConfig(config: StackCardConfig) {
     this._config = config;
+  }
+
+  updated(changed: Map<string, unknown>) {
+    if ((changed.has("hass") || changed.has("_config")) && this._config?.stack_status_entity) {
+      const id = getDeviceIdFromEntity(this.hass, this._config.stack_status_entity);
+      if (id !== this._deviceId) this._deviceId = id;
+    }
   }
 
   _valueChanged(field: keyof StackCardConfig, value: unknown) {
@@ -844,6 +913,12 @@ class PortainerStackCardEditor extends LitElement {
     return (ev: Event) => this._valueChanged(field, (ev.target as HTMLInputElement).value);
   }
 
+  _updateContainerLabel(deviceId: string, value: string) {
+    const overrides = { ...(this._config.container_overrides ?? {}) };
+    overrides[deviceId] = { ...(overrides[deviceId] ?? {}), label: value };
+    this._valueChanged("container_overrides", overrides);
+  }
+
   render() {
     if (!this.hass || !this._config) return html``;
     const cfg = this._config;
@@ -851,9 +926,12 @@ class PortainerStackCardEditor extends LitElement {
     const swFilter = portainerDomainFilter(this.hass, "switch");
     const snFilter = portainerDomainFilter(this.hass, "sensor");
 
+    const discoveredContainers =
+      this._deviceId ? getContainersForStack(this.hass, this._deviceId) : [];
+
     return html`
       <div class="editor-row">
-        <span class="editor-label">Title</span>
+        <span class="editor-label">Title (displays as "Title - Stack")</span>
         <ha-textfield
           label="Title"
           .value=${cfg.title ?? ""}
@@ -921,6 +999,31 @@ class PortainerStackCardEditor extends LitElement {
         ></ha-entity-picker>
       </div>
 
+      ${discoveredContainers.length > 0
+        ? html`
+            <div class="editor-section">Container Labels</div>
+            <span class="editor-label" style="opacity:0.5;font-size:0.75rem;">
+              Rename each auto-discovered container row. Leave blank to use the device name.
+            </span>
+            ${discoveredContainers.map(
+              (c) => html`
+                <div class="editor-row" style="margin-top:8px;">
+                  <span class="editor-sub">${c.name}</span>
+                  <ha-textfield
+                    label="Display label"
+                    .value=${cfg.container_overrides?.[c.deviceId]?.label ?? ""}
+                    @change=${(ev: Event) =>
+                      this._updateContainerLabel(
+                        c.deviceId,
+                        (ev.target as HTMLInputElement).value
+                      )}
+                  ></ha-textfield>
+                </div>
+              `
+            )}
+          `
+        : nothing}
+
       <div class="editor-section">Options</div>
       <div class="editor-row">
         <ha-formfield label="Show start/stop controls">
@@ -945,26 +1048,7 @@ class PortainerContainerCardEditor extends LitElement {
   }
 
   static get styles() {
-    return css`
-      .editor-row {
-        margin-bottom: 12px;
-      }
-      .editor-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        opacity: 0.7;
-        margin-bottom: 4px;
-        display: block;
-      }
-      .editor-section {
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        opacity: 0.4;
-        margin: 16px 0 8px;
-      }
-    `;
+    return EDITOR_CSS;
   }
 
   _config!: ContainerCardConfig;
@@ -999,7 +1083,7 @@ class PortainerContainerCardEditor extends LitElement {
 
     return html`
       <div class="editor-row">
-        <span class="editor-label">Title</span>
+        <span class="editor-label">Title (displays as "Title - Container")</span>
         <ha-textfield
           label="Title"
           .value=${cfg.title ?? ""}
@@ -1120,26 +1204,7 @@ class PortainerEndpointCardEditor extends LitElement {
   }
 
   static get styles() {
-    return css`
-      .editor-row {
-        margin-bottom: 12px;
-      }
-      .editor-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        opacity: 0.7;
-        margin-bottom: 4px;
-        display: block;
-      }
-      .editor-section {
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        opacity: 0.4;
-        margin: 16px 0 8px;
-      }
-    `;
+    return EDITOR_CSS;
   }
 
   _config!: EndpointCardConfig;
@@ -1173,7 +1238,7 @@ class PortainerEndpointCardEditor extends LitElement {
 
     return html`
       <div class="editor-row">
-        <span class="editor-label">Title</span>
+        <span class="editor-label">Title (displays as "Title - Endpoint")</span>
         <ha-textfield
           label="Title"
           .value=${cfg.title ?? ""}
@@ -1239,16 +1304,6 @@ class PortainerEndpointCardEditor extends LitElement {
           .entityFilter=${snFilter}
           include-domains='["sensor"]'
           @value-changed=${this._entityChanged("containers_stopped_entity")}
-        ></ha-entity-picker>
-      </div>
-      <div class="editor-row">
-        <span class="editor-label">Paused</span>
-        <ha-entity-picker
-          .hass=${this.hass}
-          .value=${cfg.containers_paused_entity ?? ""}
-          .entityFilter=${snFilter}
-          include-domains='["sensor"]'
-          @value-changed=${this._entityChanged("containers_paused_entity")}
         ></ha-entity-picker>
       </div>
 

@@ -8,6 +8,7 @@ export interface StackCardConfig {
   ip_address?: string;
   show_controls?: boolean;
   icon?: string;
+  container_overrides?: Record<string, { label?: string }>;
 }
 
 export interface ContainerCardConfig {
@@ -32,7 +33,6 @@ export interface EndpointCardConfig {
   containers_count_entity?: string;
   containers_running_entity?: string;
   containers_stopped_entity?: string;
-  containers_paused_entity?: string;
   docker_version_entity?: string;
   os_entity?: string;
   memory_total_entity?: string;
