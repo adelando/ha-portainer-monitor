@@ -62,7 +62,17 @@ function entityValueWithUnit(hass: HomeAssistant, entityId: string | undefined):
   if (!entityId) return "—";
   const entity = hass.states[entityId];
   if (!entity || entity.state === "unavailable" || entity.state === "unknown") return "—";
+  // formatEntityState respects the user's display_precision and unit settings
+  if (typeof hass.formatEntityState === "function") {
+    return hass.formatEntityState(entity);
+  }
+  // Fallback: respect display_precision attribute, default 2 dp
   const unit = entity.attributes.unit_of_measurement as string | undefined;
+  const num = parseFloat(entity.state);
+  if (!isNaN(num)) {
+    const precision = (entity.attributes.display_precision as number | undefined) ?? 2;
+    return unit ? `${num.toFixed(precision)} ${unit}` : num.toFixed(precision);
+  }
   return unit ? `${entity.state} ${unit}` : entity.state;
 }
 
@@ -244,15 +254,15 @@ class PortainerStackCard extends LitElement {
         .stack-summary {
           display: flex;
           gap: 16px;
-          margin-bottom: 2px;
+          margin: 0;
         }
         .container-rows {
           width: 100%;
-          border-collapse: collapse;
         }
         .ctr-row {
           display: grid;
-          grid-template-columns: minmax(60px, auto) 1fr 1fr auto;
+          grid-template-columns: minmax(60px, 90px) 80px 80px 1fr;
+          justify-items: start;
           align-items: center;
           gap: 6px 12px;
           padding: 5px 0;
@@ -351,9 +361,6 @@ class PortainerStackCard extends LitElement {
             </div>
             <span class="card-title">${title}</span>
           </div>
-          <div class="icon-badge">
-            <ha-icon icon="${cfg.icon || "mdi:layers-outline"}"></ha-icon>
-          </div>
         </div>
 
         <div class="status-row">
@@ -362,24 +369,23 @@ class PortainerStackCard extends LitElement {
           ${ip ? html`<span class="ip-label">${ip}</span>` : nothing}
         </div>
 
-        ${stackType || containerCount
-          ? html`
-              <div class="stack-summary">
-                ${containerCount
-                  ? html`<span class="stat-label"
-                      >${containerCount} container${Number(containerCount) !== 1 ? "s" : ""}</span
-                    >`
-                  : nothing}
-                ${stackType
-                  ? html`<span class="stat-label">${stackType}</span>`
-                  : nothing}
-              </div>
-            `
-          : nothing}
-
-        ${containers.length > 0
+        ${containers.length > 0 || stackType || containerCount
           ? html`
               <div class="divider"></div>
+              ${stackType || containerCount
+                ? html`
+                    <div class="stack-summary" style="margin-bottom:8px;">
+                      ${containerCount
+                        ? html`<span class="stat-label"
+                            >${containerCount} container${Number(containerCount) !== 1 ? "s" : ""}</span
+                          >`
+                        : nothing}
+                      ${stackType
+                        ? html`<span class="stat-label">${stackType}</span>`
+                        : nothing}
+                    </div>
+                  `
+                : nothing}
               <div class="container-rows">
                 ${containers.map((c) => {
                   const cStatus = getState(this.hass, c.statusEntity);
@@ -947,13 +953,11 @@ class PortainerStackCardEditor extends LitElement {
         ></ha-textfield>
       </div>
       <div class="editor-row">
-        <span class="editor-label">Icon (MDI)</span>
-        <ha-textfield
-          label="Icon"
+        <span class="editor-label">Icon</span>
+        <ha-icon-picker
           .value=${cfg.icon ?? ""}
-          @change=${this._inputChanged("icon")}
-          placeholder="mdi:layers-outline"
-        ></ha-textfield>
+          @value-changed=${(ev: CustomEvent) => this._valueChanged("icon", ev.detail.value)}
+        ></ha-icon-picker>
       </div>
 
       <div class="editor-section">Entities</div>
@@ -1099,13 +1103,11 @@ class PortainerContainerCardEditor extends LitElement {
         ></ha-textfield>
       </div>
       <div class="editor-row">
-        <span class="editor-label">Icon (MDI)</span>
-        <ha-textfield
-          label="Icon"
+        <span class="editor-label">Icon</span>
+        <ha-icon-picker
           .value=${cfg.icon ?? ""}
-          @change=${this._inputChanged("icon")}
-          placeholder="mdi:docker"
-        ></ha-textfield>
+          @value-changed=${(ev: CustomEvent) => this._valueChanged("icon", ev.detail.value)}
+        ></ha-icon-picker>
       </div>
 
       <div class="editor-section">Entities</div>
@@ -1254,13 +1256,11 @@ class PortainerEndpointCardEditor extends LitElement {
         ></ha-textfield>
       </div>
       <div class="editor-row">
-        <span class="editor-label">Icon (MDI)</span>
-        <ha-textfield
-          label="Icon"
+        <span class="editor-label">Icon</span>
+        <ha-icon-picker
           .value=${cfg.icon ?? ""}
-          @change=${this._inputChanged("icon")}
-          placeholder="mdi:server"
-        ></ha-textfield>
+          @value-changed=${(ev: CustomEvent) => this._valueChanged("icon", ev.detail.value)}
+        ></ha-icon-picker>
       </div>
 
       <div class="editor-section">Status</div>

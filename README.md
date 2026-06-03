@@ -10,7 +10,7 @@ Requires the built-in **Portainer integration** (Home Assistant 2025.10+).
 
 | Card | Type | Use for |
 |------|------|---------|
-| `portainer-stack-card` | Stack | A Docker Compose / Swarm stack with auto-discovered child container columns |
+| `portainer-stack-card` | Stack | A Docker Compose / Swarm stack with auto-discovered child container rows |
 | `portainer-container-card` | Container | A single container with CPU %, memory bar, and controls |
 | `portainer-endpoint-card` | Endpoint | A Docker host with container counts, system info, and disk usage |
 
@@ -27,23 +27,47 @@ Requires the built-in **Portainer integration** (Home Assistant 2025.10+).
 
 ## Configuration
 
-All cards are configured via the **visual editor** — click the card, then the pencil icon. Only Portainer entities appear in the entity pickers.
+All cards are configured via the **visual editor** — click the card, then the pencil icon. Only Portainer entities appear in the entity pickers. Icons are chosen with a built-in searchable icon picker.
+
+### Title format
+
+The title field is a prefix. The card type is appended automatically:
+
+| Title field | Displayed as |
+|-------------|--------------|
+| `Pyramid PC` | **Pyramid PC - Endpoint** |
+| `BTC-Trader` | **BTC-Trader - Stack** |
+| *(empty)* | **Endpoint** / **Stack** / **Container** |
+
+---
 
 ### Stack Card
 
 ```yaml
 type: custom:portainer-stack-card
-title: crypto-tradebot (stack)
-stack_status_entity: binary_sensor.portainer_crypto_tradebot_stack_status
-stack_switch_entity: switch.portainer_crypto_tradebot_stack
-stack_type_entity: sensor.portainer_crypto_tradebot_stack_type
-container_count_entity: sensor.portainer_crypto_tradebot_stack_containers_count
-ip_address: "192.168.0.4 : 8765"
+title: BTC-Trader
+stack_status_entity: binary_sensor.portainer_btc_trader_stack_status
+stack_switch_entity: switch.portainer_btc_trader_stack
+stack_type_entity: sensor.portainer_btc_trader_stack_type
+container_count_entity: sensor.portainer_btc_trader_stack_containers_count
+ip_address: "192.168.0.4:8765"
 show_controls: true
 icon: mdi:bitcoin
 ```
 
-Child container rows are **auto-discovered** — the card finds all container devices nested under the stack device and shows their CPU %, memory %, and status automatically.
+Child container rows are **auto-discovered** — the card finds all container devices nested under the stack device and shows their label, CPU %, memory %, and status icon in a per-row table. Each container's label defaults to the last segment of its device name, or can be customised:
+
+```yaml
+container_overrides:
+  <device_id>:
+    label: "BOT"
+  <device_id_2>:
+    label: "DASH"
+```
+
+> Device IDs are UUIDs set by HA. The visual editor lists discovered containers by name with a label field — no need to look up IDs manually.
+
+---
 
 ### Container Card
 
@@ -63,16 +87,17 @@ ip_address: "192.168.0.4"
 
 > **Note:** `state_entity` is required for the **Resume** button to appear. The card only renders Resume when `sensor.*_container_state` reads `paused` — without it the button is always hidden.
 
+---
+
 ### Endpoint Card
 
 ```yaml
 type: custom:portainer-endpoint-card
-title: my-server (endpoint)
+title: Pyramid PC
 status_entity: binary_sensor.portainer_local_status
 containers_count_entity: sensor.portainer_local_containers_count
 containers_running_entity: sensor.portainer_local_containers_running
 containers_stopped_entity: sensor.portainer_local_containers_stopped
-containers_paused_entity: sensor.portainer_local_containers_paused
 docker_version_entity: sensor.portainer_local_docker_version
 os_entity: sensor.portainer_local_operating_system
 memory_total_entity: sensor.portainer_local_memory_total
@@ -83,6 +108,8 @@ container_disk_total_entity: sensor.portainer_local_container_disk_usage_total_s
 prune_images_button_entity: button.portainer_local_prune_unused_images
 ip_address: "192.168.0.4"
 ```
+
+Disk and RAM values are displayed using the unit and precision HA has configured for each entity (respects your display precision settings).
 
 > **Tip:** If your endpoint name contains underscores (e.g. `my_server`), entity IDs will look like `sensor.portainer_my_server_containers_count`. Use the visual editor — it filters to Portainer entities automatically.
 
@@ -97,7 +124,7 @@ ip_address: "192.168.0.4"
 | Red `#d50000` | Exited / Dead / Offline |
 | Grey `#757575` | Unavailable / Unknown |
 
-The card border glows in the status colour. Stopped container counts are shown in red; paused counts in amber.
+The card border glows in the status colour. Stack container rows use `mdi:check-circle`, `mdi:alert-circle`, or `mdi:close-circle` next to each container's status text.
 
 ---
 

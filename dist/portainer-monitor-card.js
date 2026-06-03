@@ -79,12 +79,23 @@ function getState(hass, entityId) {
     return (_a = hass.states[entityId]) === null || _a === void 0 ? void 0 : _a.state;
 }
 function entityValueWithUnit(hass, entityId) {
+    var _a;
     if (!entityId)
         return "—";
     const entity = hass.states[entityId];
     if (!entity || entity.state === "unavailable" || entity.state === "unknown")
         return "—";
+    // formatEntityState respects the user's display_precision and unit settings
+    if (typeof hass.formatEntityState === "function") {
+        return hass.formatEntityState(entity);
+    }
+    // Fallback: respect display_precision attribute, default 2 dp
     const unit = entity.attributes.unit_of_measurement;
+    const num = parseFloat(entity.state);
+    if (!isNaN(num)) {
+        const precision = (_a = entity.attributes.display_precision) !== null && _a !== void 0 ? _a : 2;
+        return unit ? `${num.toFixed(precision)} ${unit}` : num.toFixed(precision);
+    }
     return unit ? `${entity.state} ${unit}` : entity.state;
 }
 function cardTitle(title, cardType) {
@@ -249,15 +260,15 @@ class PortainerStackCard extends i {
         .stack-summary {
           display: flex;
           gap: 16px;
-          margin-bottom: 2px;
+          margin: 0;
         }
         .container-rows {
           width: 100%;
-          border-collapse: collapse;
         }
         .ctr-row {
           display: grid;
-          grid-template-columns: minmax(60px, auto) 1fr 1fr auto;
+          grid-template-columns: minmax(60px, 90px) 80px 80px 1fr;
+          justify-items: start;
           align-items: center;
           gap: 6px 12px;
           padding: 5px 0;
@@ -347,9 +358,6 @@ class PortainerStackCard extends i {
             </div>
             <span class="card-title">${title}</span>
           </div>
-          <div class="icon-badge">
-            <ha-icon icon="${cfg.icon || "mdi:layers-outline"}"></ha-icon>
-          </div>
         </div>
 
         <div class="status-row">
@@ -358,24 +366,23 @@ class PortainerStackCard extends i {
           ${ip ? b `<span class="ip-label">${ip}</span>` : A}
         </div>
 
-        ${stackType || containerCount
-            ? b `
-              <div class="stack-summary">
-                ${containerCount
-                ? b `<span class="stat-label"
-                      >${containerCount} container${Number(containerCount) !== 1 ? "s" : ""}</span
-                    >`
-                : A}
-                ${stackType
-                ? b `<span class="stat-label">${stackType}</span>`
-                : A}
-              </div>
-            `
-            : A}
-
-        ${containers.length > 0
+        ${containers.length > 0 || stackType || containerCount
             ? b `
               <div class="divider"></div>
+              ${stackType || containerCount
+                ? b `
+                    <div class="stack-summary" style="margin-bottom:8px;">
+                      ${containerCount
+                    ? b `<span class="stat-label"
+                            >${containerCount} container${Number(containerCount) !== 1 ? "s" : ""}</span
+                          >`
+                    : A}
+                      ${stackType
+                    ? b `<span class="stat-label">${stackType}</span>`
+                    : A}
+                    </div>
+                  `
+                : A}
               <div class="container-rows">
                 ${containers.map((c) => {
                 var _a;
@@ -902,13 +909,11 @@ class PortainerStackCardEditor extends i {
         ></ha-textfield>
       </div>
       <div class="editor-row">
-        <span class="editor-label">Icon (MDI)</span>
-        <ha-textfield
-          label="Icon"
+        <span class="editor-label">Icon</span>
+        <ha-icon-picker
           .value=${(_c = cfg.icon) !== null && _c !== void 0 ? _c : ""}
-          @change=${this._inputChanged("icon")}
-          placeholder="mdi:layers-outline"
-        ></ha-textfield>
+          @value-changed=${(ev) => this._valueChanged("icon", ev.detail.value)}
+        ></ha-icon-picker>
       </div>
 
       <div class="editor-section">Entities</div>
@@ -1037,13 +1042,11 @@ class PortainerContainerCardEditor extends i {
         ></ha-textfield>
       </div>
       <div class="editor-row">
-        <span class="editor-label">Icon (MDI)</span>
-        <ha-textfield
-          label="Icon"
+        <span class="editor-label">Icon</span>
+        <ha-icon-picker
           .value=${(_c = cfg.icon) !== null && _c !== void 0 ? _c : ""}
-          @change=${this._inputChanged("icon")}
-          placeholder="mdi:docker"
-        ></ha-textfield>
+          @value-changed=${(ev) => this._valueChanged("icon", ev.detail.value)}
+        ></ha-icon-picker>
       </div>
 
       <div class="editor-section">Entities</div>
@@ -1179,13 +1182,11 @@ class PortainerEndpointCardEditor extends i {
         ></ha-textfield>
       </div>
       <div class="editor-row">
-        <span class="editor-label">Icon (MDI)</span>
-        <ha-textfield
-          label="Icon"
+        <span class="editor-label">Icon</span>
+        <ha-icon-picker
           .value=${(_c = cfg.icon) !== null && _c !== void 0 ? _c : ""}
-          @change=${this._inputChanged("icon")}
-          placeholder="mdi:server"
-        ></ha-textfield>
+          @value-changed=${(ev) => this._valueChanged("icon", ev.detail.value)}
+        ></ha-icon-picker>
       </div>
 
       <div class="editor-section">Status</div>
