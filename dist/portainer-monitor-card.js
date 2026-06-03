@@ -431,6 +431,7 @@ class PortainerContainerCard extends i {
         const level = binaryToLevel(statusState);
         const borderColor = color(level);
         const label = statusState === "on" ? "Running" : stateLabel(statusState);
+        const containerState = getState(this.hass, cfg.state_entity);
         const cpu = getState(this.hass, cfg.cpu_entity);
         const mem = getState(this.hass, cfg.memory_entity);
         const switchState = getState(this.hass, cfg.container_switch_entity);
@@ -520,7 +521,7 @@ class PortainerContainerCard extends i {
                 >
               `
             : A}
-          ${statusState !== "on" && cfg.resume_button_entity
+          ${containerState === "paused" && cfg.resume_button_entity
             ? b `
                 <ha-button
                   @click=${() => {
@@ -930,7 +931,7 @@ class PortainerContainerCardEditor extends i {
         return (ev) => this._valueChanged(field, ev.target.value);
     }
     render() {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
         if (!this.hass || !this._config)
             return b ``;
         const cfg = this._config;
@@ -978,10 +979,20 @@ class PortainerContainerCardEditor extends i {
         ></ha-entity-picker>
       </div>
       <div class="editor-row">
+        <span class="editor-label">Container State (sensor — required for Resume button)</span>
+        <ha-entity-picker
+          .hass=${this.hass}
+          .value=${(_e = cfg.state_entity) !== null && _e !== void 0 ? _e : ""}
+          .entityFilter=${snFilter}
+          include-domains='["sensor"]'
+          @value-changed=${this._entityChanged("state_entity")}
+        ></ha-entity-picker>
+      </div>
+      <div class="editor-row">
         <span class="editor-label">CPU Usage (sensor)</span>
         <ha-entity-picker
           .hass=${this.hass}
-          .value=${(_e = cfg.cpu_entity) !== null && _e !== void 0 ? _e : ""}
+          .value=${(_f = cfg.cpu_entity) !== null && _f !== void 0 ? _f : ""}
           .entityFilter=${snFilter}
           include-domains='["sensor"]'
           @value-changed=${this._entityChanged("cpu_entity")}
@@ -991,7 +1002,7 @@ class PortainerContainerCardEditor extends i {
         <span class="editor-label">Memory Usage % (sensor)</span>
         <ha-entity-picker
           .hass=${this.hass}
-          .value=${(_f = cfg.memory_entity) !== null && _f !== void 0 ? _f : ""}
+          .value=${(_g = cfg.memory_entity) !== null && _g !== void 0 ? _g : ""}
           .entityFilter=${snFilter}
           include-domains='["sensor"]'
           @value-changed=${this._entityChanged("memory_entity")}
@@ -1001,7 +1012,7 @@ class PortainerContainerCardEditor extends i {
         <span class="editor-label">Container Switch</span>
         <ha-entity-picker
           .hass=${this.hass}
-          .value=${(_g = cfg.container_switch_entity) !== null && _g !== void 0 ? _g : ""}
+          .value=${(_h = cfg.container_switch_entity) !== null && _h !== void 0 ? _h : ""}
           .entityFilter=${swFilter}
           include-domains='["switch"]'
           @value-changed=${this._entityChanged("container_switch_entity")}
@@ -1011,7 +1022,7 @@ class PortainerContainerCardEditor extends i {
         <span class="editor-label">Restart Button</span>
         <ha-entity-picker
           .hass=${this.hass}
-          .value=${(_h = cfg.restart_button_entity) !== null && _h !== void 0 ? _h : ""}
+          .value=${(_j = cfg.restart_button_entity) !== null && _j !== void 0 ? _j : ""}
           .entityFilter=${btnFilter}
           include-domains='["button"]'
           @value-changed=${this._entityChanged("restart_button_entity")}
@@ -1021,7 +1032,7 @@ class PortainerContainerCardEditor extends i {
         <span class="editor-label">Pause Button</span>
         <ha-entity-picker
           .hass=${this.hass}
-          .value=${(_j = cfg.pause_button_entity) !== null && _j !== void 0 ? _j : ""}
+          .value=${(_k = cfg.pause_button_entity) !== null && _k !== void 0 ? _k : ""}
           .entityFilter=${btnFilter}
           include-domains='["button"]'
           @value-changed=${this._entityChanged("pause_button_entity")}
@@ -1031,7 +1042,7 @@ class PortainerContainerCardEditor extends i {
         <span class="editor-label">Resume Button</span>
         <ha-entity-picker
           .hass=${this.hass}
-          .value=${(_k = cfg.resume_button_entity) !== null && _k !== void 0 ? _k : ""}
+          .value=${(_l = cfg.resume_button_entity) !== null && _l !== void 0 ? _l : ""}
           .entityFilter=${btnFilter}
           include-domains='["button"]'
           @value-changed=${this._entityChanged("resume_button_entity")}

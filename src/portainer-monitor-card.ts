@@ -448,6 +448,7 @@ class PortainerContainerCard extends LitElement {
     const borderColor = color(level);
     const label = statusState === "on" ? "Running" : stateLabel(statusState);
 
+    const containerState = getState(this.hass, cfg.state_entity);
     const cpu = getState(this.hass, cfg.cpu_entity);
     const mem = getState(this.hass, cfg.memory_entity);
     const switchState = getState(this.hass, cfg.container_switch_entity);
@@ -539,7 +540,7 @@ class PortainerContainerCard extends LitElement {
                 >
               `
             : nothing}
-          ${statusState !== "on" && cfg.resume_button_entity
+          ${containerState === "paused" && cfg.resume_button_entity
             ? html`
                 <ha-button
                   @click=${() => {
@@ -1033,6 +1034,16 @@ class PortainerContainerCardEditor extends LitElement {
           .entityFilter=${bsFilter}
           include-domains='["binary_sensor"]'
           @value-changed=${this._entityChanged("status_entity")}
+        ></ha-entity-picker>
+      </div>
+      <div class="editor-row">
+        <span class="editor-label">Container State (sensor — required for Resume button)</span>
+        <ha-entity-picker
+          .hass=${this.hass}
+          .value=${cfg.state_entity ?? ""}
+          .entityFilter=${snFilter}
+          include-domains='["sensor"]'
+          @value-changed=${this._entityChanged("state_entity")}
         ></ha-entity-picker>
       </div>
       <div class="editor-row">
