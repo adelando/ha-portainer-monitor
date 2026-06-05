@@ -68,5 +68,6 @@ export interface HomeAssistant {
   states: Record<string, HassEntity>;
   entities: Record<string, HassEntityRegistryEntry>;
   devices: Record<string, HassDevice>;
+  formatEntityState?(stateObj: HassEntity): string;
   callService(domain: string, service: string, data: Record<string, unknown>): void;
 }
